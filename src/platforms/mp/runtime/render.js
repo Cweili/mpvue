@@ -114,9 +114,11 @@ function throttle (func, wait, options) {
 }
 
 // 优化频繁的 setData: https://mp.weixin.qq.com/debug/wxadoc/dev/framework/performance/tips.html
-const throttleSetData = throttle((handle, data) => {
-  handle(data)
-}, 50)
+function getThrottleSetData() {
+  return throttle((handle, data) => {
+    handle(data)
+  }, 50)
+}
 
 function getPage (vm) {
   const rootVueVM = vm.$root
@@ -133,13 +135,20 @@ function getPage (vm) {
 // 优化每次 setData 都传递大量新数据
 export function updateDataToMP () {
   const page = getPage(this)
-  if (!page) {
+
+  // 对于被销毁的节点，不更新data https://github.com/Meituan-Dianping/mpvue/issues/1642
+  if (!page || this._isDestroyed) {
     return
   }
 
   const data = formatVmData(this)
   diffData(this, data)
-  throttleSetData(page.setData.bind(page), data)
+
+  // 修复不同实例 setData 时可能出现丢失
+  if (!this._sd) {
+    this._sd = getThrottleSetData()
+  }
+  this._sd(page.setData.bind(page), data)
 }
 
 export function initDataToMP () {
